@@ -2,22 +2,21 @@ import pandas as pd
 from serpapi import GoogleSearch
 import streamlit as st
 
-# Page Configuration
+# إعداد الصفحة
 st.set_page_config(
-    page_title="Iraq Telecom Coverage Monitor", page_icon="📡", layout="wide"
+    page_title="المحلل والباحث الشامل - SerpApi", page_icon="🔍", layout="wide"
 )
 
-st.title("📡 العراق - مراقب تغطية وجودة شبكات الاتصالات")
+st.title("🔍 محرك البحث والتحليل الشامل (Universal Search & Sentiment Analyzer)")
 st.markdown(
-    "تتبع شكاوى التغطية، انقطاعات الخدمة، وسوء جودة الإنترنت (4G/5G/FTTH) عبر محرك البحث والمنصات المحلية."
+    "ابحث عن أي موضوع، منتج، أو خدمة، وقم بتحليل واستخراج النتائج وتنظيمها تلقائياً."
 )
 
-# Sidebar Controls
-st.sidebar.header("إعدادات البحث والتحليل")
+# الشريط الجانبي للإعدادات العامة
+st.sidebar.header("⚙️ إعدادات البحث")
 
-# 1. API Key handling (Streamlit Secrets or Manual Input)
+# 1. مفتاح API
 serpapi_key = st.secrets.get("SERPAPI_KEY", "")
-
 if not serpapi_key:
     serpapi_key = st.sidebar.text_input(
         "SerpApi API Key",
@@ -25,54 +24,61 @@ if not serpapi_key:
         help="أدخل مفتاح SerpApi هنا أو ضع قيمته في Secrets",
     )
 
-# 2. Preset search suggestions for Iraq telecom
-search_preset = st.sidebar.selectbox(
-    "نماذج استعلام جاهزة:",
-    [
-        "تغطية آسياسيل وزين العراق (عام)",
-        "ضعف تغطية 4G و 5G بغداد",
-        "انقطاع خدمة الإنترنت وإيرثلنك",
-        "استعلام مخصص...",
-    ],
+# 2. نص البحث الحر
+query_input = st.sidebar.text_input(
+    "عبارة البحث (Search Query)",
+    value="أسعار السيارت المستعملة في بغداد",
+    help="أدخل أي عبارة بحث تريد تحليل نتائجها",
 )
 
-default_queries = {
-    "تغطية آسياسيل وزين العراق (عام)": 'مشكلة تغطية OR "ضعف الشبكة" OR "ماكو شبكة" آسياسيل OR زين',
-    "ضعف تغطية 4G و 5G بغداد": 'ضعف التغطية OR "انقطاع الخدمة" 4G OR 5G بغداد',
-    "انقطاع خدمة الإنترنت وإيرثلنك": 'انقطاع الإنترنت OR "بطء الخدمة" إيرثلنك OR FTTH',
-    "استعلام مخصص...": "ضعف التغطية 4G بغداد",
+# 3. إعدادات النطاق الجغرافي واللغة
+col_lang, col_country = st.sidebar.columns(2)
+
+country_options = {
+    "العراق 🇮🇶": ("iq", "Iraq"),
+    "السعودية 🇸🇦": ("sa", "Saudi Arabia"),
+    "الإمارات 🇦🇪": ("ae", "United Arab Emirates"),
+    "مصر 🇪🇬": ("eg", "Egypt"),
+    "عالمي (All)": ("", ""),
 }
 
-selected_query = default_queries[search_preset]
+selected_country_label = st.sidebar.selectbox(
+    "الدولة المتهدفة (Location):", list(country_options.keys())
+)
+gl_code, location_name = country_options[selected_country_label]
 
-if search_preset == "استعلام مخصص...":
-    query_input = st.sidebar.text_input(
-        "عبارة البحث المخصصة", value=selected_query
-    )
-else:
-    query_input = st.sidebar.text_input("عبارة البحث", value=selected_query)
+lang_options = {"العربية": "ar", "English": "en", "جميع اللغات": ""}
+selected_lang_label = st.sidebar.selectbox(
+    "لغة البحث (Language):", list(lang_options.keys())
+)
+hl_code = lang_options[selected_lang_label]
 
 max_results = st.sidebar.slider(
-    "عدد النتائج المطلوب فحصها", min_value=5, max_value=50, value=20
+    "عدد النتائج المطلوبة", min_value=5, max_value=100, value=20
 )
 
 
-def fetch_network_issues(query: str, api_key: str, max_res: int = 20):
-    """Fetch search results from Google via SerpApi targeted for Iraq."""
+def fetch_universal_search(
+    query: str, api_key: str, gl: str, location: str, hl: str, max_res: int
+):
+    """جلب نتائج البحث العامة من Google عبر SerpApi بناءً على الفلاتر."""
     params = {
         "engine": "google",
         "q": query,
-        "location": "Iraq",
-        "hl": "ar",
-        "gl": "iq",
         "api_key": api_key,
     }
+
+    if gl:
+        params["gl"] = gl
+    if location:
+        params["location"] = location
+    if hl:
+        params["hl"] = hl
 
     try:
         search = GoogleSearch(params)
         results = search.get_dict()
 
-        # Check for API error response
         if "error" in results:
             st.error(f"خطأ في استجابة SerpApi: {results['error']}")
             return []
@@ -83,10 +89,11 @@ def fetch_network_issues(query: str, api_key: str, max_res: int = 20):
         for item in organic_results[:max_res]:
             extracted_data.append(
                 {
-                    "Title": item.get("title", ""),
-                    "Snippet": item.get("snippet", ""),
-                    "Link": item.get("link", ""),
-                    "Source": item.get("displayed_link", ""),
+                    "العنوان (Title)": item.get("title", ""),
+                    "المقتطف (Snippet)": item.get("snippet", ""),
+                    "الرابط (Link)": item.get("link", ""),
+                    "المصدر (Domain)": item.get("displayed_link", ""),
+                    "الترتيب (Rank)": item.get("position", ""),
                 }
             )
 
@@ -97,162 +104,62 @@ def fetch_network_issues(query: str, api_key: str, max_res: int = 20):
         return []
 
 
-def analyze_and_classify(data_list):
-    """Classify regions, operators, issue types, and priority levels from Arabic text snippets."""
-    classified_records = []
-
-    # Iraqi Geographical Entities
-    provinces = [
-        "بغداد",
-        "البصرة",
-        "أربيل",
-        "النجف",
-        "كربلاء",
-        "الموصل",
-        "نينوى",
-        "كركوك",
-        "السليمانية",
-        "دهوك",
-        "الانبار",
-        "الرمادي",
-        "ديالى",
-        "بعقوبة",
-        "بابل",
-        "الحلة",
-        "ذي قار",
-        "الناصرية",
-        "ميسان",
-        "العمارة",
-        "الديوانية",
-        "المثنى",
-        "واسط",
-        "الكوت",
-        "المنصور",
-        "الكرادة",
-        "الزيونة",
-        "حي الجامعة",
-        "الشعب",
-        "الدورة",
-    ]
-
-    # Telecom Operators in Iraq
-    operators = {
-        "آسياسيل": ["آسياسيل", "Asiacell"],
-        "زين العراق": ["زين", "Zain"],
-        "كورك": ["كورك", "Korek"],
-        "إيرثلنك": ["إيرثلنك", "Earthlink"],
-        "سوفت بنك / ضوئي": ["FTTH", "الضوئي", "كيبل ضوئي"],
-    }
-
-    # Defect Keywords & Severity Mapping
-    outage_keywords = [
-        "انقطاع",
-        "فاصل",
-        "توقف",
-        "ماكو شبكة",
-        "لا توجد خدمة",
-        "قطع",
-        "طافية",
-        "فاصلة",
-    ]
-    speed_keywords = [
-        "بطيء",
-        "ضعيف",
-        "تذبذب",
-        "بطء",
-        "تحميل",
-        "رديء",
-        "ضعف الشبكة",
-    ]
-
-    for item in data_list:
-        text = f"{item['Title']} {item['Snippet']}"
-
-        # 1. Location Detection
-        found_region = "غير محدد / عام"
-        for reg in provinces:
-            if reg in text:
-                found_region = reg
-                break
-
-        # 2. Operator Detection
-        found_operator = "غير محدد"
-        for op_name, keywords in operators.items():
-            if any(kw.lower() in text.lower() for kw in keywords):
-                found_operator = op_name
-                break
-
-        # 3. Issue Classification & Severity Level
-        issue_type = "استفسار / منشور عام"
-        severity = "P3 - منخفض"
-
-        if any(kw in text for kw in outage_keywords):
-            issue_type = "انقطاع تام / تغطية (Outage)"
-            severity = "P1 - حرج"
-        elif any(kw in text for kw in speed_keywords):
-            issue_type = "بطء وسوء جودة (Low Speed)"
-            severity = "P2 - متوسط"
-
-        classified_records.append(
-            {
-                "المحافظة / المنطقة": found_region,
-                "الشركة / المزود": found_operator,
-                "نوع المشكلة": issue_type,
-                "مستوى الأولوية": severity,
-                "العنوان": item["Title"],
-                "المقتطف (Snippet)": item["Snippet"],
-                "الرابط": item["Link"],
-            }
-        )
-
-    return pd.DataFrame(classified_records)
+def analyze_general_data(data_list):
+    """تحليل عام للبيانات واستخراج إحصائيات المواقع المصدرة."""
+    df = pd.DataFrame(data_list)
+    return df
 
 
-# Main Interface Execution
-if st.button("🚀 تشغيل البحث والتحليل الميداني", type="primary"):
+# تنفيذ البحث
+if st.button("🚀 بدء البحث وتحليل النتائج", type="primary"):
     if not serpapi_key:
         st.error(
             "يرجى إدخال مفتاح SerpApi في الشريط الجانبي أو إضافته في Streamlit Secrets."
         )
+    elif not query_input.strip():
+        st.warning("يرجى كتابة عبارة البحث أولاً.")
     else:
-        with st.spinner("جاري جلب البيانات وتحليلها..."):
-            raw_data = fetch_network_issues(
-                query_input, serpapi_key, max_results
+        with st.spinner("جاري جلب نتائج البحث وتحليل البيانات..."):
+            raw_data = fetch_universal_search(
+                query_input,
+                serpapi_key,
+                gl_code,
+                location_name,
+                hl_code,
+                max_results,
             )
 
         if raw_data:
-            df = analyze_and_classify(raw_data)
+            df = analyze_general_data(raw_data)
 
-            # High-level Metrics Summary
-            p1_count = len(df[df["مستوى الأولوية"] == "P1 - حرج"])
-            p2_count = len(df[df["مستوى الأولوية"] == "P2 - متوسط"])
-            p3_count = len(df[df["مستوى الأولوية"] == "P3 - منخفض"])
-
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("إجمالي النتائج", len(df))
-            col2.metric("اعطال حرجة (P1)", p1_count)
-            col3.metric("مشاكل جودة (P2)", p2_count)
-            col4.metric("استفسارات عامة (P3)", p3_count)
+            # عرض الإحصائيات السريعة
+            col1, col2 = st.columns(2)
+            col1.metric("إجمالي النتائج المستخرجة", len(df))
+            col2.metric("عدد المواقع الفريدة (Unique Domains)", df["المصدر (Domain)"].nunique())
 
             st.markdown("---")
-            st.subheader("📊 جدول الشكاوى والمشاكل المصنفة")
+            st.subheader("📊 جدول النتائج المنظم")
 
-            # Interactive DataFrame
+            # عرض الجدول التفاعلي
             st.dataframe(
                 df,
-                column_config={"الرابط": st.column_config.LinkColumn("الرابط")},
+                column_config={
+                    "الرابط (Link)": st.column_config.LinkColumn(
+                        "الرابط (Link)"
+                    )
+                },
                 use_container_width=True,
             )
 
-            # Export to CSV Button
+            # زر تحميل الملف CSV
             csv_data = df.to_csv(index=False, encoding="utf-8-sig")
             st.download_button(
-                label="📥 تحميل التقرير بصيغة CSV",
+                label="📥 تحميل النتائج بصيغة CSV",
                 data=csv_data,
-                file_name="iraq_network_coverage_report.csv",
+                file_name="search_results_report.csv",
                 mime="text/csv",
             )
         else:
             st.warning(
-                "لم يتم العثور على نتائج matching لهذا الاستعلام. جرب اختيار استعلام أوسع من القائمة الجاهزة."
+                "لم يتم العثور على نتائج. جرب تغيير عبارة البحث أو تقليل الفلاتر."
             )
