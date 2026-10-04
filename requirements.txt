@@ -3,3 +3,4 @@ google-genai
 pandas
 serpapi
 deprecated
+google-search-results
